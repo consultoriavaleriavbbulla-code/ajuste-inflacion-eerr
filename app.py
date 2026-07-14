@@ -14,6 +14,7 @@ import pandas as pd
 from balance_parser import load_balance
 from inflation_engine import calcular_ajuste
 from excel_export import export_to_bytes
+from indices_loader import load_indices
 import storage
 
 st.set_page_config(page_title="Ajuste por Inflacion - EERR", layout="wide")
@@ -23,27 +24,17 @@ st.caption("RT 6 + RT 54 FACPCE — VB Advisory")
 # ---------------------------------------------------------------------------
 # 1. Cliente
 # ---------------------------------------------------------------------------
-st.header("1. Cliente")
-clientes_existentes = storage.listar_clientes()
-col_a, col_b = st.columns([2, 1])
-with col_a:
-    opciones = ["-- Nuevo cliente --"] + clientes_existentes
-    seleccion = st.selectbox("Cliente", opciones)
-with col_b:
-    if seleccion == "-- Nuevo cliente --":
-        cliente = st.text_input("Nombre del nuevo cliente")
-    else:
-        cliente = seleccion
-        st.text_input("Nombre del nuevo cliente", value="", disabled=True, placeholder="(usando cliente existente)")
+st.header("1. Cliente", divider="blue")
+cliente = st.text_input("Nombre del cliente", placeholder="Ej: Cliente ABC S.A.")
 
 if not cliente:
-    st.info("Elegi o cargá un cliente para continuar.")
+    st.info("Escribi el nombre del cliente para continuar.")
     st.stop()
 
 # ---------------------------------------------------------------------------
 # 2. Balance
 # ---------------------------------------------------------------------------
-st.header("2. Balance provisional")
+st.header("2. Balance provisional", divider="green")
 archivo = st.file_uploader("Subi el Excel exportado del sistema contable", type=["xlsx"])
 
 if not archivo:
@@ -62,12 +53,37 @@ st.success(f"Se detectaron {len(df)} cuentas y {len(meses)} meses: {' -> '.join(
 # ---------------------------------------------------------------------------
 # 3. Indices FACPCE por mes
 # ---------------------------------------------------------------------------
-st.header("3. Indices FACPCE (RT 6 + RT 54) de cada mes")
+st.header("3. Indices FACPCE (RT 6 + RT 54) de cada mes", divider="orange")
 st.caption("El indice de cierre es el del ultimo mes del ejercicio (el mas a la derecha).")
 
 if "indices_df" not in st.session_state or st.session_state.get("indices_meses") != meses:
     st.session_state["indices_df"] = pd.DataFrame({"Mes": meses, "Indice": [None] * len(meses)})
     st.session_state["indices_meses"] = meses
+
+archivo_indices = st.file_uploader(
+    "Opcional: subi un Excel con los indices (primera columna: Mes, segunda columna: Indice)",
+    type=["xlsx"],
+    key="indices_file_uploader",
+)
+
+if archivo_indices is not None:
+    archivo_id = f"{archivo_indices.name}-{archivo_indices.size}"
+    if st.session_state.get("indices_archivo_id") != archivo_id:
+        try:
+            encontrados, no_reconocidos = load_indices(archivo_indices, meses)
+            nuevo_df = st.session_state["indices_df"].copy()
+            for mes, valor in encontrados.items():
+                nuevo_df.loc[nuevo_df["Mes"] == mes, "Indice"] = valor
+            st.session_state["indices_df"] = nuevo_df
+            st.session_state.pop("indices_editor", None)  # fuerza refrescar la tabla editable
+            st.session_state["indices_archivo_id"] = archivo_id
+
+            mensaje = f"Se cargaron {len(encontrados)} de {len(meses)} indices desde el Excel."
+            if no_reconocidos:
+                mensaje += f" No se reconocieron: {', '.join(no_reconocidos)}."
+            st.success(mensaje)
+        except ValueError as e:
+            st.error(f"No se pudo leer el Excel de indices: {e}")
 
 indices_editado = st.data_editor(
     st.session_state["indices_df"],
@@ -88,7 +104,7 @@ if not indices_completos:
 # ---------------------------------------------------------------------------
 # 4. Cuentas ajustables
 # ---------------------------------------------------------------------------
-st.header("4. Cuentas que se ajustan por inflacion")
+st.header("4. Cuentas que se ajustan por inflacion", divider="violet")
 st.caption(
     "Por defecto se proponen ajustables todas las cuentas de resultado (regla general RT 6). "
     "Desmarca las que correspondan a partidas ya expresadas en moneda de cierre "
@@ -126,7 +142,7 @@ cuentas_ajustables = dict(zip(cuentas_editado["Codigo"], cuentas_editado["Ajusta
 # ---------------------------------------------------------------------------
 # 5. Procesar
 # ---------------------------------------------------------------------------
-st.header("5. Procesar")
+st.header("5. Procesar", divider="red")
 
 puede_procesar = indices_completos
 if st.button("Calcular ajuste por inflacion", type="primary", disabled=not puede_procesar):
