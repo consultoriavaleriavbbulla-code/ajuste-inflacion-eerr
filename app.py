@@ -153,9 +153,11 @@ if "resultado_calc" in st.session_state:
 
     total_hist = r["total"].sum()
     total_aj = r["total_ajustado"].sum()
-    c1, c2 = st.columns(2)
+    recpam = total_aj - total_hist
+    c1, c2, c3 = st.columns(3)
     c1.metric("Total historico del ejercicio", f"{total_hist:,.2f}")
     c2.metric("Total ajustado por inflacion", f"{total_aj:,.2f}")
+    c3.metric("Total RECPAM de Resultado del Ej.", f"{recpam:,.2f}")
 
     excel_bytes = export_to_bytes(
         st.session_state["resultado_calc"],

@@ -14,6 +14,7 @@ NUM_FORMAT = "#,##0.00"
 HEADER_FILL = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
 SUBHEADER_FILL = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
 TOTAL_FILL = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
+RECPAM_FILL = PatternFill(start_color="C6E0B4", end_color="C6E0B4", fill_type="solid")
 THIN = Side(style="thin", color="B7B7B7")
 BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
@@ -119,6 +120,28 @@ def build_workbook(df_result, meses: list, cliente: str, indices: dict) -> Workb
         cell.fill = TOTAL_FILL
     for c in range(1, last_col + 1):
         ws.cell(row=r, column=c).border = BORDER
+
+    total_row = r
+
+    # --- Fila RECPAM (diferencia entre total ajustado y total historico) ---
+    recpam_row = total_row + 1
+    hist_letter = get_column_letter(total_col_start)
+    aj_letter = get_column_letter(total_col_start + 1)
+
+    ws.merge_cells(start_row=recpam_row, start_column=2, end_row=recpam_row, end_column=total_col_start - 1)
+    ws.cell(row=recpam_row, column=2, value="Total RECPAM de Resultado del Ej.")
+    ws.cell(row=recpam_row, column=2).font = Font(bold=True)
+    ws.cell(row=recpam_row, column=2).alignment = Alignment(horizontal="right", vertical="center")
+
+    ws.merge_cells(start_row=recpam_row, start_column=total_col_start, end_row=recpam_row, end_column=total_col_start + 1)
+    recpam_cell = ws.cell(row=recpam_row, column=total_col_start)
+    recpam_cell.value = f"={aj_letter}{total_row}-{hist_letter}{total_row}"
+    recpam_cell.number_format = NUM_FORMAT
+    recpam_cell.font = Font(bold=True)
+
+    for c in range(2, last_col + 1):
+        ws.cell(row=recpam_row, column=c).fill = RECPAM_FILL
+        ws.cell(row=recpam_row, column=c).border = BORDER
 
     # --- Anchos de columna ---
     ws.column_dimensions["A"].width = 18
